@@ -6,10 +6,13 @@
 
 #include <unordered_map>
 
-std::unordered_map<int, quint64> lastPressedMap;
-quint64 lastTime = 0;
+// 上次每个按键的时间点
+std::unordered_map<int, TimeUtils::timestamp_t> lastPressedMap;
 
-myDialog::myDialog(QWidget *parent) :
+// 上次在密码框按任意键的时间点
+TimeUtils::timestamp_t lastPasswordKeyPressTime = 0;
+
+LoginDialog::LoginDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::loginDialog)
 {
@@ -21,25 +24,25 @@ myDialog::myDialog(QWidget *parent) :
     // 接收Username的按键按下事件
     connect(
         lineEditUsername, &LineEdit::onKeyPressEvent,
-        this, &myDialog::onUserKeyPressEvent
+        this, &LoginDialog::onUserKeyPressEvent
         );
 
     // 接收Password的按键按下事件
     connect(
         lineEditPassword, &LineEdit::onKeyPressEvent,
-        this, &myDialog::onPwdKeyPressEvent
+        this, &LoginDialog::onPwdKeyPressEvent
         );
 
     // 接收Username的按键弹起事件
     connect(
         lineEditUsername, &LineEdit::onKeyReleaseEvent,
-        this, &myDialog::onUserKeyReleaseEvent
+        this, &LoginDialog::onUserKeyReleaseEvent
         );
 
     // 接收Password的按键弹起事件
     connect(
         lineEditPassword, &LineEdit::onKeyReleaseEvent,
-        this, &myDialog::onPwdKeyReleaseEvent
+        this, &LoginDialog::onPwdKeyReleaseEvent
         );
 
     // 把两个输入框分别放在对应布局中
@@ -48,18 +51,18 @@ myDialog::myDialog(QWidget *parent) :
 
 }
 
-myDialog::~myDialog()
+LoginDialog::~LoginDialog()
 {
     delete ui;
 }
 
 
-void myDialog::on_exitButton_clicked()
+void LoginDialog::on_exitButton_clicked()
 {
 
 }
 
-void myDialog::on_loginButton_clicked()
+void LoginDialog::on_loginButton_clicked()
 {
 
     /* Set userName and password, three conditions.
@@ -84,53 +87,54 @@ void myDialog::on_loginButton_clicked()
         lineEditUsername->setFocus();
     }
 }
-QString myDialog::getCurrentTime()
-{
-    return QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
-}
-void myDialog::onUserKeyPressEvent(QKeyEvent* event)
+
+void LoginDialog::reportKeyDown(QKeyEvent* event)
 {
     qDebug() << "按键" << event->key()
-             << " 于内部时间" << event->timestamp()
-             << " 实际时间" << getCurrentTime()
+             << " 于" << TimeUtils::getCurrentTimeFormatted()
              << " 被按下";
-    lastPressedMap[event->key()] = event->timestamp();
 }
 
-void myDialog::onUserKeyReleaseEvent(QKeyEvent* event)
+void LoginDialog::reportKeyUp(QKeyEvent* event, TimeUtils::timestamp_t lastPressed)
 {
-    quint64 lastPressed = lastPressedMap[event->key()];
+    auto nano = TimeUtils::getCurrentNanoSinceEpoch() - lastPressed;
     qDebug() << "按键" << event->key()
-             << " 于内部时间" << event->timestamp()
-             << " 实际时间" << getCurrentTime()
+             << " 于" << TimeUtils::getCurrentTimeFormatted()
              << " 被松开。"
              << " 总共按了"
-             << (event->timestamp() - lastPressed)
-             << "毫秒";
+             << nano << "ns，也就是"
+             << (nano / 1000) << "us";
 }
 
-void myDialog::onPwdKeyPressEvent(QKeyEvent* event)
+void LoginDialog::onUserKeyPressEvent(QKeyEvent* event)
 {
-    qDebug() << "按键" << event->key()
-             << " 于内部时间" << event->timestamp()
-             << " 实际时间" << getCurrentTime()
-             << " 被按下";
-    lastPressedMap[event->key()] = event->timestamp();
-    if (lastTime != 0)
+    reportKeyDown(event);
+    lastPressedMap[event->key()] = TimeUtils::getCurrentNanoSinceEpoch();
+}
+
+void LoginDialog::onUserKeyReleaseEvent(QKeyEvent* event)
+{
+    auto lastPressed = lastPressedMap[event->key()];
+    reportKeyUp(event, lastPressed);
+}
+
+void LoginDialog::onPwdKeyPressEvent(QKeyEvent* event)
+{
+    reportKeyDown(event);
+    lastPressedMap[event->key()] = TimeUtils::getCurrentNanoSinceEpoch();
+    if (lastPasswordKeyPressTime != 0)
     {
-        qDebug() << event->timestamp()-lastTime << " ms";
+        auto nano = TimeUtils::getCurrentNanoSinceEpoch()
+                    - lastPasswordKeyPressTime;
+        qDebug() << "距离上次按键经过了"
+            << nano << " ns，也就是"
+            << (nano / 1000) << " us";
     }
 }
 
-void myDialog::onPwdKeyReleaseEvent(QKeyEvent* event)
+void LoginDialog::onPwdKeyReleaseEvent(QKeyEvent* event)
 {
     quint64 lastPressed = lastPressedMap[event->key()];
-    qDebug() << "按键" << event->key()
-             << " 于内部时间" << event->timestamp()
-             << " 实际时间" << getCurrentTime()
-             << " 被松开。"
-             << " 总共按了"
-             << (event->timestamp() - lastPressed)
-             << "毫秒";
-    lastTime = event->timestamp();
+    reportKeyUp(event, lastPressed);
+    lastPasswordKeyPressTime = TimeUtils::getCurrentNanoSinceEpoch();
 }

@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     }
 
     Widget w;
-    myDialog login;
+    LoginDialog login;
 
     if(login.exec() == QDialog::Accepted)
     {
